@@ -63,13 +63,13 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
       // visualization_msgs::msg::MarkerArray marker_array;
         visualization_msgs::msg::Marker marker;
-        marker.header.frame_id = "odom";
+        marker.header.frame_id = "base_link";
         marker.header.stamp = scan_in->header.stamp;
         marker.ns = "";
         marker.id = 0;
         marker.type = visualization_msgs::msg::Marker::POINTS;
         marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.scale.x = 1.0;
+        marker.scale.x = 0.1;
         marker.scale.y = 0.1;
         marker.scale.z = 0.1;
         marker.color.a = 1.0;
@@ -246,22 +246,25 @@ void clustering::transformPointList(const pointList& in, pointList& out){
   geometry_msgs::msg::PointStamped point_in, point_out;
 
   geometry_msgs::msg::TransformStamped latest_tf_;
-  latest_tf_ = tf_buffer_->lookupTransform("odom","base_scan",tf2::TimePointZero);
-
+  try{
+  latest_tf_ = tf_buffer_->lookupTransform("base_link","base_scan",tf2::TimePointZero);
+  }
+  catch (tf2::TransformException & e){return;}
 
   Point point; 
   point_in.header.frame_id = "base_scan";
-  point_in.header.stamp = rclcpp::Time(0);
+  rclcpp::Time rclcpp_time = now();
+  point_in.header.stamp = rclcpp_time;
   for (unsigned int i = 0; i < in.size(); ++i) {
     point_in.point.x = in[i].first;
     point_in.point.y = in[i].second;
-    RCLCPP_INFO (get_logger(),"point in x %4f", point_in.point.x);
-    RCLCPP_INFO (get_logger(),"point in y %4f", point_in.point.y);
+    // RCLCPP_INFO (get_logger(),"point in x %4f", point_in.point.x);
+    // RCLCPP_INFO (get_logger(),"point in y %4f", point_in.point.y);
     tf2::doTransform( point_in , point_out,latest_tf_);
     point.first = point_out.point.x;
     point.second= point_out.point.y;
-    RCLCPP_INFO (get_logger(),"point out x %4f", point.first);
-    RCLCPP_INFO (get_logger(),"point out y %4f", point.second);
+    // RCLCPP_INFO (get_logger(),"point out x %4f", point.first);
+    // RCLCPP_INFO (get_logger(),"point out y %4f", point.second);
     out.push_back(point);
   }
 }
