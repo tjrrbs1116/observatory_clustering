@@ -38,7 +38,7 @@ class clustering : public rclcpp::Node{
     void callback(const sensor_msgs::msg::LaserScan::ConstPtr &);
     void Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in , std::vector<pointList> &clusters);
     void transformPointList(const pointList& , pointList& );
-    float dth =0.2;
+    float dth =0.1;
     private:
 
 };

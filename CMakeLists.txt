@@ -24,7 +24,6 @@ find_package(Boost REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
-find_package(clustering_msgs REQUIRED)
 find_package(visualization_msgs)
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -57,7 +56,6 @@ set(dependencies
   tf2_ros
   tf2
   visualization_msgs
-  clustering_msgs
 )
 
 

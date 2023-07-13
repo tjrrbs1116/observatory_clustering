@@ -73,13 +73,13 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         marker.scale.y = 0.1;
         marker.scale.z = 0.1;
         marker.color.a = 1.0;
-        marker.color.r = 0.0;
-        marker.color.g = 1.0;
+        marker.color.r = 1.0;
+        marker.color.g = 0.0;
         marker.color.b = 0.0;
       for (int i=0; i<euclidean.size();i++)
       {
-        RCLCPP_INFO(get_logger(),"cluster[%d] mean x %4f",i,euclidean[i][0]);
-        RCLCPP_INFO(get_logger(),"cluster[%d] mean y %4f",i,euclidean[i][1]);
+        // RCLCPP_INFO(get_logger(),"cluster[%d] mean x %4f",i,euclidean[i][0]);
+        // RCLCPP_INFO(get_logger(),"cluster[%d] mean y %4f",i,euclidean[i][1]);
         geometry_msgs::msg::Point temp;
         temp.x = euclidean[i][0];
         temp.y = euclidean[i][1];
@@ -106,7 +106,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
   
     //Find the number of non inf laser scan values and save them in c_points
     for (unsigned int i = 0; i < scan.ranges.size(); ++i){
-      if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
+      if( (i*scan.angle_increment >5.44 || i*scan.angle_increment < 4.10 )  ){continue;}
       if(isinf(scan.ranges[i])){continue;}
       cpoints++;
     }
@@ -119,7 +119,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
     for(unsigned int i = 0; i<scan.ranges.size(); ++i){
       if(!isinf(scan.ranges[i])){
 
-        if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
+        if( (i*scan.angle_increment >5.44 || i*scan.angle_increment < 4.10 )  ){continue;}
 
         // RCLCPP_INFO (get_logger(), "now rad  %4f", i*scan.angle_increment);
         polar[j][0] = scan.ranges[i]; //first column is the range 
@@ -130,11 +130,11 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
     polar[c_points]=polar[0];
 
       // c_points = 점군개수 91개 
-      // for (int i=0; i<polar.size(); i++)
-      // {
-      //       RCLCPP_INFO (get_logger(),"polar[%d]is ranges is  %4f", i,polar[i][0]);
-      //       RCLCPP_INFO (get_logger(),"polar[%d]is rad is  %4f", i,polar[i][1]);
-      // }
+      for (int i=0; i<polar.size(); i++)
+      {
+            RCLCPP_INFO (get_logger(),"polar[%d]is ranges is  %4f", i,polar[i][0]);
+            RCLCPP_INFO (get_logger(),"polar[%d]is rad is  %4f", i,polar[i][1]);
+      }
 
       //complete the circle
 
@@ -147,7 +147,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
       std::vector<bool> clustered2(c_points+1 ,false); // change to true when it is clustered by another one
 
 
-      float l = 10; // λ is an acceptable angle for determining the points to be of the same cluster
+      float l = 5; // λ is an acceptable angle for determining the points to be of the same cluster
       l = l * 0.0174532;   // degree to radian conversion;
       const float s = 0;   // σr is the standard deviation of the noise of the distance measure
       for (unsigned int i=0; i < c_points ; ++i){
@@ -172,6 +172,14 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
 
       clustered2[0] = clustered2[c_points];
 
+    for(int i=0; i< clustered1.size();i++)
+    {
+        RCLCPP_INFO (get_logger(),"clustered1[%d] is %s",i ,clustered1[i] ? "true": "false");
+        RCLCPP_INFO (get_logger(),"clustered2[%d] is %s",i ,clustered2[i] ? "true" :"false");
+    }
+
+
+  
       std::vector<int> begin; //saving the first index of a cluster
       std::vector<int> nclus; //number of clustered points
       int i =0;
@@ -195,7 +203,10 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
       i++;
       } // while
 
-
+  for(int i=0; i<begin.size(); i++)
+  {RCLCPP_INFO (get_logger(),"begin point is %d", begin[i]);
+  RCLCPP_INFO (get_logger()," nclus is %d", nclus[i]);
+  }
 
         // take care of last point being beginning of cluster
   if(clustered1[cpoints-1]== true and clustered2[c_points-1] == false){
