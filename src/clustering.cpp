@@ -15,6 +15,10 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     pub_marker_array =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker", rclcpp::QoS(10));
 
+    // odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+    // "odom", rclcpp::SystemDefaultsQoS(),
+    // std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
+
 }
 
 
@@ -25,9 +29,11 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
   // delete all Markers 
   std::vector<pointList> point_clusters_not_transformed;
-  clustering::Clustering(scan_in, point_clusters_not_transformed); // 극좌표계 형식으로 clustering저장
-
+  std::vector<float> object_degs;
+  clustering::Clustering(scan_in, point_clusters_not_transformed,object_degs); // 극좌표계 형식으로 clustering저장
   std::vector<pointList> point_clusters; // 좌표 변환 해서 보내줌
+
+
   for (unsigned int i = 0; i < point_clusters_not_transformed.size(); ++i) {
     pointList point_cluster;
     clustering::transformPointList(point_clusters_not_transformed[i], point_cluster);
@@ -45,10 +51,10 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
     // double euclidean[point_clusters.size()][2];// Matrix object to save the euclidean distances
     std::vector< std::vector<float> > euclidean(point_clusters.size() ,std::vector<float>(2));
     //Finding mean coordinates of group and associating with cluster Objects
-    double mean_x = 0, mean_y = 0;
+    float mean_x = 0, mean_y = 0;
 
     for(unsigned int g = 0; g<point_clusters.size();++g){
-      double sum_x = 0, sum_y = 0;
+      float sum_x = 0, sum_y = 0;
         
       for(unsigned int l =0; l<point_clusters[g].size(); l++){
         sum_x = sum_x + point_clusters[g][l].first;
@@ -61,17 +67,23 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         euclidean[g][1] =mean_y;
 
         //find charge
-        if( sqrt(pow(euclidean[g][0]) + pow(euclidean[g][1])) <= 0.7){
-
-
-
-
+        if(sqrt(pow(euclidean[g][0],2) + pow(euclidean[g][1],2)) <= charge_object_distance){
+              find_object=true;
+              charge_object= {euclidean[g][0],euclidean[g][1]}; 
+              opponent_deg  = object_degs[g];
         }
       }
 
+      RCLCPP_INFO (get_logger(),"charge is x y {%4f ,%4f}  deg is %4f",charge_object.first,charge_object.second,opponent_deg);
+
+      if(find_object){
+
+        clustering::docking_y();
+
+      }
       // visualization_msgs::msg::MarkerArray marker_array;
         visualization_msgs::msg::Marker marker;
-        marker.header.frame_id = "odom";
+        marker.header.frame_id = "base_link";
         marker.header.stamp = scan_in->header.stamp;
         marker.ns = "";
         marker.id = 0;
@@ -102,9 +114,12 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
 
+void clustering::docking_y(){
 
+  
+}
 
-void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in , std::vector<pointList> &clusters)
+void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in , std::vector<pointList> &clusters , std::vector<float > &object_deg_)
 {
 
     scan = *scan_in;
@@ -232,7 +247,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
   for(unsigned int i=0; i<begin.size(); ++i){
 
     pointList cluster;
-
+    float temp;
     double x,y;
     int j =begin[i];
     bool fl = true; // flag for not going back through the stack 
@@ -243,14 +258,24 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
       {
         x = polar[j][0] * cos(polar[j][1]);       //x = r × cos( θ )
         y = polar[j][0] * sin(polar[j][1]);       //y = r × sin( θ )
+        temp = polar[j][1] ;
+        if(temp > 3.14 ){ temp = temp -6.28;}
       }
       else{
        x = polar[j-len][0] *cos(polar[j-len][1]); //x = r × cos( θ )
        y = polar[j-len][0] *sin(polar[j-len][1]); //y = r × sin( θ ) 
+       temp = polar[j-len][1] ;
+       if(temp > 3.14 ){ temp = temp - 6.28;}
       }
+
+      temp +=temp;
       cluster.push_back(Point(x, y));
       ++j;
     }
+
+    temp = (temp / nclus[i])*57.2958;
+    object_deg_.push_back(temp);
+    RCLCPP_INFO(get_logger(), "deg is %4f" , temp );
     clusters.push_back(cluster); // 극좌표계 형식으로 포인트 저장 
   }
 }
@@ -265,7 +290,7 @@ void clustering::transformPointList(const pointList& in, pointList& out){
 
   geometry_msgs::msg::TransformStamped latest_tf_;
   try{
-  latest_tf_ = tf_buffer_->lookupTransform("odom","base_scan",tf2::TimePointZero);
+  latest_tf_ = tf_buffer_->lookupTransform("base_link","base_scan",tf2::TimePointZero);
   }
   catch (tf2::TransformException & e){return;}
 
@@ -286,3 +311,12 @@ void clustering::transformPointList(const pointList& in, pointList& out){
     out.push_back(point);
   }
 }
+
+
+// void
+// clustering::OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg)
+// {
+
+//     this->current_odom = msg ;
+
+// }
