@@ -31,6 +31,7 @@ class clustering : public rclcpp::Node{
     
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array; 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
+    
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_scan2; 
     sensor_msgs::msg::LaserScan scan;
     // std::vector<Cluster> clusters;
