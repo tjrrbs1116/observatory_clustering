@@ -5,6 +5,8 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
+
+#include "piot_can_msgs/msg/bms_flag_fb.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/message_filter.h"
@@ -30,6 +32,9 @@ class clustering : public rclcpp::Node{
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     
+
+
+    rclcpp::Subscription<piot_can_msgs::msg::BmsFlagFb>::SharedPtr bms_flag_fb_sub;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array; 
      
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array2;
@@ -45,6 +50,8 @@ class clustering : public rclcpp::Node{
     // std::vector<Cluster> clusters;
 
     float get_yaw(float x, float y, float z, float w );
+
+    void bmscallback(const piot_can_msgs::msg::BmsFlagFb::SharedPtr msg);
     void timerCallback();
     void docking_y();
     void OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg);

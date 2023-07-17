@@ -11,6 +11,9 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     auto custom_qos = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));   
     auto subscriber_options = rclcpp::SubscriptionOptions();  
     sub_scan = this->create_subscription<sensor_msgs::msg::LaserScan>("/scan",custom_qos, std::bind(&clustering::callback,this,std::placeholders::_1),subscriber_options);
+
+
+  
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     pub_marker_array =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker", rclcpp::QoS(10));
@@ -107,7 +110,11 @@ void clustering::timerCallback(){
         }
 
         pub_cmd_vel->publish(cmd);
-        if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1;}
+        if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1;
+            auto custom_qos2 = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));   
+        auto subscriber_options2 = rclcpp::SubscriptionOptions();  
+         bms_flag_fb_sub = this->create_subscription<piot_can_msgs::msg::BmsFlagFb>("/bms_flag_fb",custom_qos2, std::bind(&clustering::bmscallback,this,std::placeholders::_1),subscriber_options2);
+        }
 
 
       }
@@ -168,6 +175,16 @@ float clustering::get_yaw(float x, float y ,float z, float w){
                 yaw = atan2(t3,t4);
 
 return yaw;
+}
+
+
+
+
+void clustering::bmscallback(const piot_can_msgs::msg::BmsFlagFb::SharedPtr msg){
+
+
+     bms_charge_flag =msg->bms_flag_fb_charge_flag ;
+
 }
 void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
