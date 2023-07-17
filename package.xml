@@ -18,7 +18,7 @@
   <depend>tf2_eigen</depend>
   <depend>tf2_ros</depend>
   <depend>tf2</depend>
-  
+  <depend>piot_can_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>launch_testing</depend>
   <depend>std_srvs</depend>

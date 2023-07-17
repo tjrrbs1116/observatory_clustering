@@ -1,7 +1,7 @@
 #include "clustering.hpp"
 
 
-
+using namespace std::chrono_literals;
 clustering::clustering(const rclcpp::NodeOptions & options)
 : Node("clustering" , options)
 
@@ -14,15 +14,161 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     pub_marker_array =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker", rclcpp::QoS(10));
-
+    pub_marker_array2 =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker2", rclcpp::QoS(10));
+    pub_cmd_vel = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel",rclcpp::QoS(10));
     // odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     // "odom", rclcpp::SystemDefaultsQoS(),
     // std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
+    timer_ = this->create_wall_timer(10ms,std::bind(&clustering::timerCallback,this));
+
+    timer_->cancel();
 
 }
 
+void clustering::timerCallback(){
+  timer_flag = true ;
+  geometry_msgs::msg::Twist cmd ;
+  process_number =  docking_y_axis + rotation_aline +rotation_opp_aline+reverse;
+  RCLCPP_INFO (get_logger(),"process_number is %d ", process_number);
+  switch(process_number){
 
 
+
+
+
+    case 0 :
+    {
+      RCLCPP_INFO (get_logger(),"this is docking_y_axis process");
+      if(    sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))>= 0.01 ){
+        {
+
+
+            float cmd_angle = atan2(charge_object.second,charge_object.first-0.5);
+            cmd.linear.x = 0.1*cos(cmd_angle);
+            cmd.linear.y = 0.1*sin(cmd_angle);
+
+
+        }
+      }
+
+      pub_cmd_vel->publish(cmd);
+
+      if(sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))< 0.01){docking_y_axis = 1;          
+          odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+          "odom", rclcpp::SystemDefaultsQoS(),
+          std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
+          timer_->cancel();
+          timer_flag = false;}
+
+      break;
+    }
+
+    case 1 :
+    {
+      RCLCPP_INFO (get_logger(),"this is rotation_aline process");
+      float deg = atan2(charge_object.second,charge_object.first);
+        
+        if(abs(deg)>= 0.005){
+            if(deg>0){
+          cmd.angular.z = 0.05;}
+          if(deg<=0) {cmd.angular.z = -0.05;}
+
+
+          pub_cmd_vel->publish(cmd);
+        }
+
+        else {
+
+          rotation_aline = 1;
+        }
+
+
+      break;}
+
+
+      case 2 :
+      {
+
+
+        float yaw = clustering::get_yaw(current_odom->pose.pose.orientation.x,current_odom->pose.pose.orientation.y,current_odom->pose.pose.orientation.z,current_odom->pose.pose.orientation.w);
+
+        if(!target_rad_flag){
+              target_rad = yaw+ 3.14159;
+              if(target_rad>=3.14159){target_rad = -6.28319+target_rad;}
+              
+              target_rad_flag = true;
+        }
+        RCLCPP_INFO (get_logger(),"now target yaw is %4f", target_rad);
+        RCLCPP_INFO (get_logger(),"now odom yaw is %4f", yaw);
+        if(abs(target_rad - yaw) >=0.01  ){
+
+
+          cmd.angular.z = 0.3;
+        }
+
+        pub_cmd_vel->publish(cmd);
+        if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1;}
+
+
+      }
+
+
+      case 3 :
+
+
+      {
+          if(reverse_sample < -0.5){
+              if(!bms_charge_flag){
+
+                cmd.linear.x = -0.1;
+
+                reverse_sample += cmd.linear.x * 0.01;
+              }
+
+
+              else{RCLCPP_INFO (get_logger(),"charge process success");
+              timer_->cancel();}
+
+
+          }
+
+        
+          else{ RCLCPP_INFO (get_logger(),"charge process failed");
+          timer_->cancel();
+          }
+
+
+
+
+
+        break;
+      }
+
+
+  }
+
+
+//timer_->cancel();
+}
+
+
+float clustering::get_yaw(float x, float y ,float z, float w){
+      float roll , pitch ,yaw;
+                float t0 = 2.0 * (w *x + y*z);
+                float t1 = 1.0 - 2.0 * (x*x + y*y);
+                roll = atan2(t0,t1);
+
+                float t2 = 2.0 * (w*z + x*y);
+                if(t2> 1.0){ t2 = 1.0; }
+                if(t2<-1.0){ t2 = -1.0;}
+                pitch = asin(t2);
+
+                float t3 = 2.0 * (w*z + x*y);
+                float t4 = 1.0 - 2.0 * (y*y + z*z);
+                yaw = atan2(t3,t4);
+
+return yaw;
+}
 void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
@@ -70,17 +216,62 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         if(sqrt(pow(euclidean[g][0],2) + pow(euclidean[g][1],2)) <= charge_object_distance){
               find_object=true;
               charge_object= {euclidean[g][0],euclidean[g][1]}; 
-              opponent_deg  = object_degs[g];
-        }
-      }
+              opponent_deg  = atan2(euclidean[g][1],euclidean[g][0]);
 
-      RCLCPP_INFO (get_logger(),"charge is x y {%4f ,%4f}  deg is %4f",charge_object.first,charge_object.second,opponent_deg);
+                          visualization_msgs::msg::Marker marker2;
+                          marker2.header.frame_id = "base_link";
+                          marker2.header.stamp = scan_in->header.stamp;
+                          marker2.ns = "";
+                          marker2.id = 0;
+                          marker2.type = visualization_msgs::msg::Marker::POINTS;
+                          marker2.action = visualization_msgs::msg::Marker::ADD;
+                          marker2.scale.x = 0.1;
+                          marker2.scale.y = 0.1;
+                          marker2.scale.z = 0.1;
+                          marker2.color.a = 1.0;
+                          marker2.color.r = 1.0;
+                          marker2.color.g = 0.0;
+                          marker2.color.b = 1.0;
+             for(unsigned int l =0; l<point_clusters[g].size(); l++){
+
+
+
+              
+                          
+                          geometry_msgs::msg::Point temp2;
+                          temp2.x = point_clusters[g][l].first;
+                          temp2.y = point_clusters[g][l].second;
+                          marker2.points.push_back(temp2);
+                        
+
+
+                      }
+
+                      pub_marker_array2->publish(marker2);
+              // RCLCPP_INFO (get_logger(),"charge clusters is x y {%4f ,%4f} ",point_clusters[g][l].first , point_clusters[g][l].second);
+
+      }
+        }
+      
+
+      RCLCPP_INFO (get_logger(),"charge is x y {%4f ,%4f}  deg is %4f",charge_object.first,charge_object.second,opponent_deg*57.2958);
 
       if(find_object){
+        if(!timer_flag){
+        timer_->reset();}
 
-        clustering::docking_y();
+
+  
+        if(docking_y_axis ==1 && !timer_flag){
+            //  RCLCPP_INFO (get_logger(),"now");
+            for(int i=0; i<5000 ; i++){}
+            timer_->reset() ; timer_flag=true;
+        } 
 
       }
+
+
+
       // visualization_msgs::msg::MarkerArray marker_array;
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id = "base_link";
@@ -98,7 +289,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         marker.color.b = 0.0;
       for (int i=0; i<euclidean.size();i++)
       {
-        RCLCPP_INFO(get_logger(),"cluster[%d] x y %4f , %4f",i,euclidean[i][0],euclidean[i][1]);
+        
         geometry_msgs::msg::Point temp;
         temp.x = euclidean[i][0];
         temp.y = euclidean[i][1];
@@ -108,16 +299,19 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
       pub_marker_array->publish(marker);
 
 
+
+
+
+
     }
 
 
+    
 
 
 
-void clustering::docking_y(){
 
-  
-}
+
 
 void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in , std::vector<pointList> &clusters , std::vector<float > &object_deg_)
 {
@@ -128,7 +322,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
   
     //Find the number of non inf laser scan values and save them in c_points
     for (unsigned int i = 0; i < scan.ranges.size(); ++i){
-      if( (i*scan.angle_increment >0.52 && i*scan.angle_increment < 5.75 )  ){continue;}
+      if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
       if(isinf(scan.ranges[i])){continue;}
       cpoints++;
     }
@@ -141,7 +335,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
     for(unsigned int i = 0; i<scan.ranges.size(); ++i){
       if(!isinf(scan.ranges[i])){
 
-        if( (i*scan.angle_increment >0.52 && i*scan.angle_increment < 5.75 )  ){continue;}
+        if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
 
         // RCLCPP_INFO (get_logger(), "now rad  %4f", i*scan.angle_increment);
         polar[j][0] = scan.ranges[i]; //first column is the range 
@@ -258,24 +452,18 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
       {
         x = polar[j][0] * cos(polar[j][1]);       //x = r × cos( θ )
         y = polar[j][0] * sin(polar[j][1]);       //y = r × sin( θ )
-        temp = polar[j][1] ;
-        if(temp > 3.14 ){ temp = temp -6.28;}
+
       }
       else{
        x = polar[j-len][0] *cos(polar[j-len][1]); //x = r × cos( θ )
        y = polar[j-len][0] *sin(polar[j-len][1]); //y = r × sin( θ ) 
-       temp = polar[j-len][1] ;
-       if(temp > 3.14 ){ temp = temp - 6.28;}
+
       }
 
-      temp +=temp;
       cluster.push_back(Point(x, y));
       ++j;
     }
 
-    temp = (temp / nclus[i])*57.2958;
-    object_deg_.push_back(temp);
-    RCLCPP_INFO(get_logger(), "deg is %4f" , temp );
     clusters.push_back(cluster); // 극좌표계 형식으로 포인트 저장 
   }
 }
@@ -313,10 +501,10 @@ void clustering::transformPointList(const pointList& in, pointList& out){
 }
 
 
-// void
-// clustering::OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg)
-// {
+void
+clustering::OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg)
+{
+    RCLCPP_INFO (get_logger(),"now  odom received");
+    this->current_odom = msg ;
 
-//     this->current_odom = msg ;
-
-// }
+}

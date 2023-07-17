@@ -25,6 +25,7 @@ find_package(Eigen3 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(visualization_msgs)
+find_package(piot_can_msgs)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -56,6 +57,7 @@ set(dependencies
   tf2_ros
   tf2
   visualization_msgs
+  piot_can_msgs
 )
 
 
