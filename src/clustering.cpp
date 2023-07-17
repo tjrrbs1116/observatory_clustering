@@ -11,6 +11,7 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     auto custom_qos = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));   
     auto subscriber_options = rclcpp::SubscriptionOptions();  
     sub_scan = this->create_subscription<sensor_msgs::msg::LaserScan>("/scan",custom_qos, std::bind(&clustering::callback,this,std::placeholders::_1),subscriber_options);
+  
 
 
   
@@ -23,10 +24,11 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     // "odom", rclcpp::SystemDefaultsQoS(),
     // std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(10ms,std::bind(&clustering::timerCallback,this));
-
     timer_->cancel();
 
+
 }
+
 
 void clustering::timerCallback(){
   timer_flag = true ;
@@ -42,7 +44,7 @@ void clustering::timerCallback(){
     case 0 :
     {
       RCLCPP_INFO (get_logger(),"this is docking_y_axis process");
-      if(    sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))>= 0.01 ){
+      if(    sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))>= 0.03 ){
         {
 
 
@@ -56,12 +58,11 @@ void clustering::timerCallback(){
 
       pub_cmd_vel->publish(cmd);
 
-      if(sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))< 0.01){docking_y_axis = 1;          
+      if(sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))< 0.03){docking_y_axis = 1;          
           odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
           "odom", rclcpp::SystemDefaultsQoS(),
           std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
-          timer_->cancel();
-          timer_flag = false;}
+          timer_->cancel();process_flag =true;}
 
       break;
     }
@@ -81,8 +82,12 @@ void clustering::timerCallback(){
         }
 
         else {
-
+          keep_charge_location =true;
           rotation_aline = 1;
+          process_flag=true;
+          timer_->cancel();
+
+       
         }
 
 
@@ -92,7 +97,7 @@ void clustering::timerCallback(){
       case 2 :
       {
 
-
+        RCLCPP_INFO (get_logger(),"this is oppo rotation process");
         float yaw = clustering::get_yaw(current_odom->pose.pose.orientation.x,current_odom->pose.pose.orientation.y,current_odom->pose.pose.orientation.z,current_odom->pose.pose.orientation.w);
 
         if(!target_rad_flag){
@@ -101,8 +106,8 @@ void clustering::timerCallback(){
               
               target_rad_flag = true;
         }
-        RCLCPP_INFO (get_logger(),"now target yaw is %4f", target_rad);
-        RCLCPP_INFO (get_logger(),"now odom yaw is %4f", yaw);
+        RCLCPP_INFO (get_logger(),"now target yaw is %4f", target_rad*57.2958);
+        RCLCPP_INFO (get_logger(),"now odom yaw is %4f", yaw*57.2958);
         if(abs(target_rad - yaw) >=0.01  ){
 
 
@@ -110,13 +115,16 @@ void clustering::timerCallback(){
         }
 
         pub_cmd_vel->publish(cmd);
-        if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1;
+        if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1; timer_->cancel(); process_flag =true; 
             auto custom_qos2 = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));   
         auto subscriber_options2 = rclcpp::SubscriptionOptions();  
          bms_flag_fb_sub = this->create_subscription<piot_can_msgs::msg::BmsFlagFb>("/bms_flag_fb",custom_qos2, std::bind(&clustering::bmscallback,this,std::placeholders::_1),subscriber_options2);
+        
+
+        
         }
 
-
+      break;
       }
 
 
@@ -124,12 +132,17 @@ void clustering::timerCallback(){
 
 
       {
-          if(reverse_sample < -0.5){
+
+        RCLCPP_INFO (get_logger(),"this is reverse process");
+          if(abs(reverse_sample) < charge_object.first - 0.35){
               if(!bms_charge_flag){
 
-                cmd.linear.x = -0.1;
+                cmd.linear.x = -0.05;
 
                 reverse_sample += cmd.linear.x * 0.01;
+                 RCLCPP_INFO (get_logger(),"reverse_sample is %4f",reverse_sample);
+
+                pub_cmd_vel->publish(cmd);
               }
 
 
@@ -185,6 +198,9 @@ void clustering::bmscallback(const piot_can_msgs::msg::BmsFlagFb::SharedPtr msg)
 
      bms_charge_flag =msg->bms_flag_fb_charge_flag ;
 
+  
+     if (bms_charge_flag){RCLCPP_INFO(get_logger(),"this is chargeflag true");}
+
 }
 void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
@@ -230,11 +246,13 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         euclidean[g][1] =mean_y;
 
         //find charge
+        
         if(sqrt(pow(euclidean[g][0],2) + pow(euclidean[g][1],2)) <= charge_object_distance){
               find_object=true;
+              if(!keep_charge_location){
               charge_object= {euclidean[g][0],euclidean[g][1]}; 
               opponent_deg  = atan2(euclidean[g][1],euclidean[g][0]);
-
+              }
                           visualization_msgs::msg::Marker marker2;
                           marker2.header.frame_id = "base_link";
                           marker2.header.stamp = scan_in->header.stamp;
@@ -275,15 +293,21 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
       if(find_object){
         if(!timer_flag){
-        timer_->reset();}
+        timer_->reset();timer_flag =true;}
 
 
   
-        if(docking_y_axis ==1 && !timer_flag){
-            //  RCLCPP_INFO (get_logger(),"now");
-            for(int i=0; i<5000 ; i++){}
-            timer_->reset() ; timer_flag=true;
+        if( process_flag){
+           
+          for(int i=0; i<50000; i++){
+           RCLCPP_INFO (get_logger(),"ig is %d",i);
+          }
+             process_flag=false;
+            timer_->reset() ; 
+            
         } 
+
+
 
       }
 
@@ -521,7 +545,9 @@ void clustering::transformPointList(const pointList& in, pointList& out){
 void
 clustering::OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
-    RCLCPP_INFO (get_logger(),"now  odom received");
+    // RCLCPP_INFO (get_logger(),"now  odom received");
     this->current_odom = msg ;
+
+  
 
 }

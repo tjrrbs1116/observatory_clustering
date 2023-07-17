@@ -43,6 +43,7 @@ class clustering : public rclcpp::Node{
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_scan2; 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel;
     rclcpp::TimerBase::SharedPtr timer_;
+
     sensor_msgs::msg::LaserScan scan;
     nav_msgs::msg::Odometry::SharedPtr current_odom;
     Point charge_object;
@@ -53,6 +54,7 @@ class clustering : public rclcpp::Node{
 
     void bmscallback(const piot_can_msgs::msg::BmsFlagFb::SharedPtr msg);
     void timerCallback();
+    void timerCallback2();
     void docking_y();
     void OdomsubReceived(const nav_msgs::msg::Odometry::SharedPtr msg);
     void callback(const sensor_msgs::msg::LaserScan::ConstPtr &);
@@ -63,8 +65,9 @@ class clustering : public rclcpp::Node{
     float target_rad = 0.0;
     bool target_rad_flag = false;
     float dth =0.05;
-    float charge_object_distance = 0.9;
+    float charge_object_distance = 1.0;
     bool find_object = false;
+    bool keep_charge_location = false;
     int reverse =0;
     int docking_y_axis = 0;
     int rotation_aline =0;
@@ -72,7 +75,9 @@ class clustering : public rclcpp::Node{
     int process_number =0;
     float reverse_sample;
     bool timer_flag =false;
+    bool process_flag = false;
     bool bms_charge_flag =false;
+    bool timer2_start =false;
     private:
 
 };
