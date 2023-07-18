@@ -26,6 +26,7 @@ clustering::clustering(const rclcpp::NodeOptions & options)
     timer_ = this->create_wall_timer(10ms,std::bind(&clustering::timerCallback,this));
     timer_->cancel();
 
+ 
 
 }
 
@@ -33,18 +34,55 @@ clustering::clustering(const rclcpp::NodeOptions & options)
 void clustering::timerCallback(){
   timer_flag = true ;
   geometry_msgs::msg::Twist cmd ;
-  process_number =  docking_y_axis + rotation_aline +rotation_opp_aline+reverse;
-  RCLCPP_INFO (get_logger(),"process_number is %d ", process_number);
+  process_number =  first_aline +docking_y_axis + rotation_aline +rotation_opp_aline+reverse;
+  // RCLCPP_INFO (get_logger(),"process_number is %d ", process_number);
+
+
+
+
   switch(process_number){
-
-
-
-
 
     case 0 :
     {
+        // RCLCPP_INFO (get_logger(),"first aline process");
+
+          Eigen::VectorXf v (2);
+          Eigen::VectorXf v1 (2);
+          v(0)=  charge_object_f.first- charge_object_l.first ; v(1) = charge_object_l.first -charge_object_l.second;
+          v1(0) = 1. ; v1(1) =0.;
+          float dot = v.dot(v1);
+          float v_norm = v.norm();
+          float v1_norm = v1.norm();
+
+          float rad = acos(dot/(v_norm * v1_norm));
+
+        RCLCPP_INFO (get_logger(),"deg distance is %4f", abs(rad - 1.5708));
+          RCLCPP_INFO (get_logger(),"deg is %4f", rad *57.2958);
+
+          if (abs(rad - 1.5708) >= 0.01 ){
+
+         
+                  if(rad >= 1.5709){cmd.angular.z = -0.05;}
+                  else{cmd.angular.z = 0.05;}
+
+            // pub_cmd_vel->publish(cmd);
+          }
+
+
+
+          if (abs(rad - 1.5708) < 0.01){  first_aline=1; process_flag =true ;timer_->cancel(); }
+
+
+
+      break; 
+    }
+
+
+
+    case 1 :
+    {
       RCLCPP_INFO (get_logger(),"this is docking_y_axis process");
-      if(    sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))>= 0.03 ){
+      if(    sqrt(pow(charge_object.first -0.55 ,2)+pow(charge_object.second,2))>= 0.03 ){
         {
 
 
@@ -56,7 +94,7 @@ void clustering::timerCallback(){
         }
       }
 
-      pub_cmd_vel->publish(cmd);
+      // pub_cmd_vel->publish(cmd);
 
       if(sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))< 0.03){docking_y_axis = 1;          
           odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -67,7 +105,7 @@ void clustering::timerCallback(){
       break;
     }
 
-    case 1 :
+    case 2 :
     {
       RCLCPP_INFO (get_logger(),"this is rotation_aline process");
       float deg = atan2(charge_object.second,charge_object.first);
@@ -78,7 +116,7 @@ void clustering::timerCallback(){
           if(deg<=0) {cmd.angular.z = -0.05;}
 
 
-          pub_cmd_vel->publish(cmd);
+          // pub_cmd_vel->publish(cmd);
         }
 
         else {
@@ -94,7 +132,7 @@ void clustering::timerCallback(){
       break;}
 
 
-      case 2 :
+      case 3 :
       {
 
         RCLCPP_INFO (get_logger(),"this is oppo rotation process");
@@ -114,7 +152,7 @@ void clustering::timerCallback(){
           cmd.angular.z = 0.3;
         }
 
-        pub_cmd_vel->publish(cmd);
+        // pub_cmd_vel->publish(cmd);
         if(abs(target_rad - yaw) <0.01){   rotation_opp_aline =1; timer_->cancel(); process_flag =true; 
             auto custom_qos2 = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));   
         auto subscriber_options2 = rclcpp::SubscriptionOptions();  
@@ -128,7 +166,7 @@ void clustering::timerCallback(){
       }
 
 
-      case 3 :
+      case 4 :
 
 
       {
@@ -142,7 +180,7 @@ void clustering::timerCallback(){
                 reverse_sample += cmd.linear.x * 0.01;
                  RCLCPP_INFO (get_logger(),"reverse_sample is %4f",reverse_sample);
 
-                pub_cmd_vel->publish(cmd);
+                // pub_cmd_vel->publish(cmd);
               }
 
 
@@ -167,7 +205,7 @@ void clustering::timerCallback(){
 
   }
 
-
+pub_cmd_vel->publish(cmd);
 //timer_->cancel();
 }
 
@@ -252,6 +290,12 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
               if(!keep_charge_location){
               charge_object= {euclidean[g][0],euclidean[g][1]}; 
               opponent_deg  = atan2(euclidean[g][1],euclidean[g][0]);
+              int last_index = point_clusters[g].size() -1;
+              int first_index = last_index /4 ;
+              last_index =  3*last_index/4;
+              charge_object_f = {point_clusters[g][first_index].first,point_clusters[g][first_index].second};
+              charge_object_l = {point_clusters[g][last_index].first,point_clusters[g][last_index].second};
+
               }
                           visualization_msgs::msg::Marker marker2;
                           marker2.header.frame_id = "base_link";
@@ -300,7 +344,9 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         if( process_flag){
            
           for(int i=0; i<50000; i++){
+            geometry_msgs::msg::Twist cmd ;
            RCLCPP_INFO (get_logger(),"ig is %d",i);
+           pub_cmd_vel->publish(cmd);
           }
              process_flag=false;
             timer_->reset() ; 
@@ -363,7 +409,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
   
     //Find the number of non inf laser scan values and save them in c_points
     for (unsigned int i = 0; i < scan.ranges.size(); ++i){
-      if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
+      if( (i*scan.angle_increment >1.57 && i*scan.angle_increment < 4.17 )  ){continue;}
       if(isinf(scan.ranges[i])){continue;}
       cpoints++;
     }
@@ -376,7 +422,7 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
     for(unsigned int i = 0; i<scan.ranges.size(); ++i){
       if(!isinf(scan.ranges[i])){
 
-        if( (i*scan.angle_increment >0.78 && i*scan.angle_increment < 5.49 )  ){continue;}
+        if( (i*scan.angle_increment >1.57 && i*scan.angle_increment < 4.17 )  ){continue;}
 
         // RCLCPP_INFO (get_logger(), "now rad  %4f", i*scan.angle_increment);
         polar[j][0] = scan.ranges[i]; //first column is the range 

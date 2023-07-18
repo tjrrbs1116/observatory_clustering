@@ -6,6 +6,7 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 
 
+#include <Eigen/Dense>
 #include "piot_can_msgs/msg/bms_flag_fb.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "tf2_ros/buffer.h"
@@ -47,6 +48,8 @@ class clustering : public rclcpp::Node{
     sensor_msgs::msg::LaserScan scan;
     nav_msgs::msg::Odometry::SharedPtr current_odom;
     Point charge_object;
+    Point charge_object_f;
+    Point charge_object_l;
     float opponent_deg;
     // std::vector<Cluster> clusters;
 
@@ -68,11 +71,17 @@ class clustering : public rclcpp::Node{
     float charge_object_distance = 1.0;
     bool find_object = false;
     bool keep_charge_location = false;
+
+
+    bool find_vector = false;
+    int first_aline =0;
     int reverse =0;
     int docking_y_axis = 0;
     int rotation_aline =0;
     int rotation_opp_aline =0;
     int process_number =0;
+
+
     float reverse_sample;
     bool timer_flag =false;
     bool process_flag = false;
