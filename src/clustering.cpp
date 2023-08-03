@@ -1,5 +1,9 @@
 #include "clustering.hpp"
 
+#define PI  3.141592
+#define rad2deg  57.2958
+#define Deg2rad 0.0174533
+#define debug 
 
 using namespace std::chrono_literals;
 clustering::clustering(const rclcpp::NodeOptions & options)
@@ -17,13 +21,19 @@ clustering::clustering(const rclcpp::NodeOptions & options)
   
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
-    pub_marker_array =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker", rclcpp::QoS(10));
+    pub_marker_array =  this->create_publisher<visualization_msgs::msg::MarkerArray>("clustering/marker", rclcpp::QoS(10));
     pub_marker_array2 =  this->create_publisher<visualization_msgs::msg::Marker>("clustering/marker2", rclcpp::QoS(10));
     pub_cmd_vel = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel",rclcpp::QoS(10));
     // odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     // "odom", rclcpp::SystemDefaultsQoS(),
     // std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(10ms,std::bind(&clustering::timerCallback,this));
+
+    first_aline_degree_threshold = 0.01; // rad
+    docking_y_axis_x_offset = 0.55;
+    docking_y_axis_tolerance =0.03;
+    charge_object_distance = 1.0;
+    find_rad = 1.0472;
     timer_->cancel();
 
  
@@ -54,23 +64,18 @@ void clustering::timerCallback(){
           float v_norm = v.norm();
           float v1_norm = v1.norm();
 
-          float rad = acos(dot/(v_norm * v1_norm));
+          float dist_rad = acos(dot/(v_norm * v1_norm));
+      #ifdef debug
+        RCLCPP_INFO (get_logger(),"deg distance is %4f", abs(dist_rad - PI/2) *rad2deg);
+        RCLCPP_INFO (get_logger(),"deg is %4f", dist_rad *rad2deg);
+      #endif
 
-        RCLCPP_INFO (get_logger(),"deg distance is %4f", abs(rad - 1.5708));
-          RCLCPP_INFO (get_logger(),"deg is %4f", rad *57.2958);
-
-          if (abs(rad - 1.5708) >= 0.01 ){
-
-         
-                  if(rad >= 1.5709){cmd.angular.z = -0.05;}
+          if (abs(dist_rad - PI/2) >= first_aline_degree_threshold ){
+                  if(dist_rad >= PI/2){cmd.angular.z = -0.05;}
                   else{cmd.angular.z = 0.05;}
-
-            // pub_cmd_vel->publish(cmd);
           }
 
-
-
-          if (abs(rad - 1.5708) < 0.01){  first_aline=1; process_flag =true ;timer_->cancel(); }
+          else{  first_aline=1; process_flag =true ;timer_->cancel(); }
 
 
 
@@ -82,21 +87,15 @@ void clustering::timerCallback(){
     case 1 :
     {
       RCLCPP_INFO (get_logger(),"this is docking_y_axis process");
-      if(    sqrt(pow(charge_object.first -0.55 ,2)+pow(charge_object.second,2))>= 0.03 ){
+      if(    sqrt(pow(charge_object.first -docking_y_axis_x_offset ,2)+pow(charge_object.second,2))>= docking_y_axis_tolerance ){
         {
-
-
-            float cmd_angle = atan2(charge_object.second,charge_object.first-0.5);
+            float cmd_angle = atan2(charge_object.second,charge_object.first-docking_y_axis_x_offset);
             cmd.linear.x = 0.1*cos(cmd_angle);
             cmd.linear.y = 0.1*sin(cmd_angle);
-
-
         }
       }
 
-      // pub_cmd_vel->publish(cmd);
-
-      if(sqrt(pow(charge_object.first -0.5,2)+pow(charge_object.second,2))< 0.03){docking_y_axis = 1;          
+      else{docking_y_axis = 1;          
           odom_pose_sub_ = create_subscription<nav_msgs::msg::Odometry>(
           "odom", rclcpp::SystemDefaultsQoS(),
           std::bind(&clustering::OdomsubReceived, this, std::placeholders::_1));
@@ -206,6 +205,10 @@ void clustering::timerCallback(){
   }
 
 pub_cmd_vel->publish(cmd);
+
+
+  
+
 //timer_->cancel();
 }
 
@@ -257,7 +260,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
     point_clusters.push_back(point_cluster);
 
   }
-    // RCLCPP_INFO(get_logger(),"point cluster size is %d", point_clusters_not_transformed.size());
+  // RCLCPP_INFO(get_logger(),"point cluster size is %d", point_clusters_not_transformed.size());
 
     // Cluster Association based on the Euclidean distance
     // I should check first all the distances and then associate based on the closest distance
@@ -311,20 +314,11 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
                           marker2.color.r = 1.0;
                           marker2.color.g = 0.0;
                           marker2.color.b = 1.0;
-             for(unsigned int l =0; l<point_clusters[g].size(); l++){
-
-
-
-              
-                          
+             for(unsigned int l =0; l<point_clusters[g].size(); l++){  
                           geometry_msgs::msg::Point temp2;
                           temp2.x = point_clusters[g][l].first;
                           temp2.y = point_clusters[g][l].second;
-                          marker2.points.push_back(temp2);
-                        
-
-
-                      }
+                          marker2.points.push_back(temp2);}
 
                       pub_marker_array2->publish(marker2);
               // RCLCPP_INFO (get_logger(),"charge clusters is x y {%4f ,%4f} ",point_clusters[g][l].first , point_clusters[g][l].second);
@@ -333,7 +327,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         }
       
 
-      RCLCPP_INFO (get_logger(),"charge is x y {%4f ,%4f}  deg is %4f",charge_object.first,charge_object.second,opponent_deg*57.2958);
+      // RCLCPP_INFO (get_logger(),"charge is x y {%4f ,%4f}  deg is %4f",charge_object.first,charge_object.second,opponent_deg*57.2958);
 
       if(find_object){
         if(!timer_flag){
@@ -359,7 +353,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
 
-      // visualization_msgs::msg::MarkerArray marker_array;
+        visualization_msgs::msg::MarkerArray marker_array;
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id = "base_link";
         marker.header.stamp = scan_in->header.stamp;
@@ -383,7 +377,70 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
         marker.points.push_back(temp);
         
       }
-      pub_marker_array->publish(marker);
+
+
+        visualization_msgs::msg::Marker marker3;
+        marker3.header.frame_id = "base_scan";
+        marker3.header.stamp = scan_in->header.stamp;
+        marker3.ns = "";
+        marker3.id = 1;
+        marker3.type = visualization_msgs::msg::Marker::ARROW;
+        marker3.action = visualization_msgs::msg::Marker::ADD;
+        marker3.scale.x = 0.05;
+        marker3.scale.y = 0.05;
+        marker3.scale.z = 0.05;
+        marker3.color.a = 1.0;
+        marker3.color.r = 0.0;
+        marker3.color.g = 0.0;
+        marker3.color.b = 1.0;
+        marker3.pose.orientation.w = 1.0;
+        geometry_msgs::msg::Point start_p,end_p;
+        // geometry_msgs::msg::Point start_p2,end_p2;
+        start_p.x = 0.0;
+        start_p.y = 0.0;
+        end_p.x = 2*cos(find_rad);
+        end_p.y = 2*sin(find_rad);
+        // start_p2.x =0.0;
+        // start_p2.y =0.0;
+        // end_p2.x = 2*cos(-1*0.87);
+        // end_p2.y = 2*sin(-1*0.87);
+
+        marker3.points.push_back(start_p);
+        marker3.points.push_back(end_p);
+
+        visualization_msgs::msg::Marker marker4;
+        marker4.header.frame_id = "base_scan";
+        marker4.header.stamp = scan_in->header.stamp;
+        marker4.ns = "";
+        marker4.id = 2;
+        marker4.type = visualization_msgs::msg::Marker::ARROW;
+        marker4.action = visualization_msgs::msg::Marker::ADD;
+        marker4.scale.x = 0.05;
+        marker4.scale.y = 0.05;
+        marker4.scale.z = 0.05;
+        marker4.color.a = 1.0;
+        marker4.color.r = 0.0;
+        marker4.color.g = 0.0;
+        marker4.color.b = 1.0;
+        marker4.pose.orientation.w = 1.0;
+
+        geometry_msgs::msg::Point start_p2,end_p2;
+        // start_p.x = 0.0;
+        // start_p.y = 0.0;
+        // end_p.x = 2*cos(0.87);
+        // end_p.y = 2*sin(0.87);
+        start_p2.x =0.0;
+        start_p2.y =0.0;
+        end_p2.x = 2*cos(-1*find_rad);
+        end_p2.y = 2*sin(-1*find_rad);
+
+        marker4.points.push_back(start_p2);
+        marker4.points.push_back(end_p2);
+      
+        marker_array.markers.push_back(marker3);
+        marker_array.markers.push_back(marker4);
+        marker_array.markers.push_back(marker);
+        pub_marker_array->publish(marker_array);
 
 
 
@@ -409,20 +466,20 @@ void clustering::Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in
   
     //Find the number of non inf laser scan values and save them in c_points
     for (unsigned int i = 0; i < scan.ranges.size(); ++i){
-      if( (i*scan.angle_increment >1.57 && i*scan.angle_increment < 4.17 )  ){continue;}
+      if( (i*scan.angle_increment >find_rad && i*scan.angle_increment < 2*PI -find_rad )  ){continue;}
       if(isinf(scan.ranges[i])){continue;}
       cpoints++;
     }
     const int c_points = cpoints;
     
-      // RCLCPP_INFO (get_logger(),"c_points is %d",c_points);
+  
 
     int j = 0;
     std::vector< std::vector<float> > polar(c_points +1 ,std::vector<float>(2)); //c_points+1 for wrapping
     for(unsigned int i = 0; i<scan.ranges.size(); ++i){
       if(!isinf(scan.ranges[i])){
 
-        if( (i*scan.angle_increment >1.57 && i*scan.angle_increment < 4.17 )  ){continue;}
+        if( (i*scan.angle_increment >find_rad && i*scan.angle_increment < 2*PI -find_rad )  ){continue;}
 
         // RCLCPP_INFO (get_logger(), "now rad  %4f", i*scan.angle_increment);
         polar[j][0] = scan.ranges[i]; //first column is the range 

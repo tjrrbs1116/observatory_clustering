@@ -36,7 +36,7 @@ class clustering : public rclcpp::Node{
 
 
     rclcpp::Subscription<piot_can_msgs::msg::BmsFlagFb>::SharedPtr bms_flag_fb_sub;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array; 
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_marker_array; 
      
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array2;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
@@ -68,9 +68,16 @@ class clustering : public rclcpp::Node{
     float target_rad = 0.0;
     bool target_rad_flag = false;
     float dth =0.05;
-    float charge_object_distance = 1.0;
+  
     bool find_object = false;
     bool keep_charge_location = false;
+
+
+    float charge_object_distance;
+    float first_aline_degree_threshold;
+    float docking_y_axis_x_offset;
+    float docking_y_axis_tolerance;
+    float find_rad;
 
 
     bool find_vector = false;
