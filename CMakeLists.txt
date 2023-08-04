@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(charge_clustering)
+project(observatory_clustering)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -26,6 +26,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(visualization_msgs)
 find_package(piot_can_msgs)
+find_package(clustering_msgs)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -34,7 +35,7 @@ include_directories(
   include
 )
 
-set(executable_name charge_clustering)
+set(executable_name observatory_clustering)
 add_executable(${executable_name}
   src/main.cpp
 )
@@ -58,12 +59,24 @@ set(dependencies
   tf2
   visualization_msgs
   piot_can_msgs
+  clustering_msgs
 )
 
+#MultiThreading Library
+OPTION (USE_OpenMP "Use OpenMP" OFF)
+IF(USE_OpenMP)
+  FIND_PACKAGE(OpenMP)
+  IF(OPENMP_FOUND)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  ENDIF()
+ENDIF()
 
 add_library(${library_name} SHARED
   src/main.cpp
   src/clustering.cpp
+  src/cluster.cpp
+  src/kalman.cpp
+  src/l_shape_tracker.cpp
 )
 
 ament_target_dependencies(${executable_name}

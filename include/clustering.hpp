@@ -2,6 +2,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
+#include "cluster.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
@@ -15,16 +16,17 @@
 #include "tf2_ros/transform_listener.h"
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include <nav_msgs/msg/odometry.hpp>
+#include <tf2/time.h>
 #include <vector>
 #include <chrono>
 #include <iostream>
 
 
 
-typedef std::pair<float, float> Point;
-typedef std::vector<Point> pointList;
+// typedef std::pair<float, float> Point;
+// typedef std::vector<Point> pointList;
 
-
+namespace observatory{
 class clustering : public rclcpp::Node{
 
     public:
@@ -37,16 +39,21 @@ class clustering : public rclcpp::Node{
 
     rclcpp::Subscription<piot_can_msgs::msg::BmsFlagFb>::SharedPtr bms_flag_fb_sub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_marker_array; 
-     
+    rclcpp::Publisher<clustering_msgs::msg::TrackArray>::SharedPtr pub_tracks_box_kf;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_array2;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::ConstSharedPtr odom_pose_sub_;
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_scan2; 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel;
+
     rclcpp::TimerBase::SharedPtr timer_;
 
     sensor_msgs::msg::LaserScan scan;
     nav_msgs::msg::Odometry::SharedPtr current_odom;
+
+
+    std::vector<Cluster> clusters;
+
     Point charge_object;
     Point charge_object_f;
     Point charge_object_l;
@@ -63,12 +70,20 @@ class clustering : public rclcpp::Node{
     void callback(const sensor_msgs::msg::LaserScan::ConstPtr &);
     void Clustering(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in , std::vector<pointList> &clusters , std::vector<float> &object_deg_);
     void transformPointList(const pointList& , pointList& );
-    float docking_yoff = 0.01;
-    float docking_xoff = 0.5;
-    float target_rad = 0.0;
+    void visualiseGroupedPoints(const std::vector<pointList> &);
+    float euclidean_distance;
+    tf2::Transform ego_pose;
+
+    unsigned long int cg       = 1;//group counter to be used as id of the clusters
+    unsigned long int cclusters= 1;//counter for the cluster objects to be used as id for the markers
+
+    float dt;
     bool target_rad_flag = false;
-    float dth =0.05;
-  
+    float dth =0.2;
+    int max_cluster_size;
+    bool p_marker_pub;
+
+
     bool find_object = false;
     bool keep_charge_location = false;
 
@@ -78,7 +93,6 @@ class clustering : public rclcpp::Node{
     float docking_y_axis_x_offset;
     float docking_y_axis_tolerance;
     float find_rad;
-
 
     bool find_vector = false;
     int first_aline =0;
@@ -99,3 +113,4 @@ class clustering : public rclcpp::Node{
 };
 
 
+}
