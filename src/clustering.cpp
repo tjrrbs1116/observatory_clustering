@@ -81,7 +81,7 @@ void clustering::bmscallback(const piot_can_msgs::msg::BmsFlagFb::SharedPtr msg)
 
 }
 void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
-
+  // delete all Markers 
   visualization_msgs::msg::Marker marker;
   visualization_msgs::msg::MarkerArray markera;
   marker.action =3;
@@ -98,14 +98,19 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
   
   catch (tf2::TransformException & e){return;}
 
+  if(time > rclcpp::Clock().now() ){
+    RCLCPP_INFO(get_logger(),"now"); clusters.clear();}
+   RCLCPP_INFO(get_logger(),"time is %lf",time);
+  time = rclcpp::Clock().now();
+  clusters.clear();
+  auto start = std::chrono::steady_clock::now();
 
-  // delete all Markers 
   std::vector<pointList> point_clusters_not_transformed;
   std::vector<float> object_degs;
   clustering::Clustering(scan_in, point_clusters_not_transformed,object_degs); // 극좌표계 형식으로 clustering저장
   std::vector<pointList> point_clusters; // 좌표 변환 해서 보내줌
 
-  RCLCPP_INFO(get_logger(),"point cluster size is %d", point_clusters_not_transformed.size());
+  // RCLCPP_INFO(get_logger(),"point cluster size is %d", point_clusters_not_transformed.size());
 
 
   for (unsigned int i = 0; i < point_clusters_not_transformed.size(); ++i) {
@@ -122,25 +127,22 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
     std::vector< std::vector<float> > euclidean(point_clusters.size() ,std::vector<float>(2));
     //Finding mean coordinates of group and associating with cluster Objects
     float mean_x = 0, mean_y = 0;
-    RCLCPP_INFO(get_logger(),"point clusters size is %d", point_clusters.size());
-    for(unsigned int g = 0; g<point_clusters.size();++g){
+    // RCLCPP_INFO(get_logger(),"point clusters size is %d", point_clusters.size());
+
+
+    for(unsigned int g = 0; g<point_clusters.size();g++){
       float sum_x = 0, sum_y = 0;
-        
-      RCLCPP_INFO(get_logger(),"point clusters[%d] size is %d",g,point_clusters[g].size());
-      int temp =0;
       for(unsigned int l =0; l<point_clusters[g].size(); l++){
 
         sum_x = sum_x + point_clusters[g][l].first;
         sum_y = sum_y + point_clusters[g][l].second;
-        RCLCPP_INFO(get_logger(),"temp is %d", temp);
-        temp ++;
       }
       mean_x = sum_x / point_clusters[g].size();
       mean_y = sum_y / point_clusters[g].size();
 
-      //---------------------------------------------------------------------------------//
-      // RCLCPP_INFO (get_logger(),"pointcluster[%d]  is x y {%4f ,%4f} ",g,mean_x , mean_y);
-
+   
+      RCLCPP_INFO (get_logger(),"pointcluster size is %d ",point_clusters.size());
+      RCLCPP_INFO (get_logger(),"CLUSTERS size is %d ",clusters.size());
       for(unsigned int c=0;c<clusters.size();++c)
       {
         euclidean[g][c] = abs( mean_x - clusters[c].meanX()) + abs(mean_y - clusters[c].meanY()); 
@@ -168,11 +170,11 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
 
-    //Update Tracked Clusters
-    // #pragma omp parallel for
-    // for(unsigned int p=0; p<pairs.size();++p){
-    //   clusters[pairs[p].first].update(point_clusters[pairs[p].second], dt, ego_pose);
-    // }
+
+    #pragma omp parallel for
+    for(unsigned int p=0; p<pairs.size();++p){
+      clusters[pairs[p].first].update(point_clusters[pairs[p].second], dt, ego_pose);
+    }
     RCLCPP_INFO(get_logger(),"deubg2");
 
     //Delete Not Associated Clusters
@@ -198,7 +200,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
       if(g_matched[i] == false && point_clusters[i].size()< max_cluster_size){
 	  Cluster cl(cclusters, point_clusters[i], dt, "base_link", ego_pose);
 	  cclusters++;
-	clusters.push_back(cl);
+	  clusters.push_back(cl);
       } 
     }
 

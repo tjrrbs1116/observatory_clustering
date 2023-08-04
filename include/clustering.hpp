@@ -73,6 +73,7 @@ class clustering : public rclcpp::Node{
     void visualiseGroupedPoints(const std::vector<pointList> &);
     float euclidean_distance;
     tf2::Transform ego_pose;
+    rclcpp::Time time;
 
     unsigned long int cg       = 1;//group counter to be used as id of the clusters
     unsigned long int cclusters= 1;//counter for the cluster objects to be used as id for the markers
