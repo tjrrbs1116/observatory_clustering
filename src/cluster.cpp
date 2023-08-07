@@ -86,6 +86,7 @@ void Cluster::update(const pointList& new_points, const double dt, const tf2::Tr
   ego_coordinates.first = ego_pose.getOrigin().getX();
   ego_coordinates.second= ego_pose.getOrigin().getY();
 
+  // RCLCPP_INFO(get_logger(),"ego_cordinate{x,y}",ego_coordinates.first,ego_coordinates.second);
   age++;
   previous_mean_values = mean_values;
   new_cluster = new_points;

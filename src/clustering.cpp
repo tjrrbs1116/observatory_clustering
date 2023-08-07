@@ -34,7 +34,7 @@ clustering::clustering(const rclcpp::NodeOptions & options)
 
 
     dt = 0.08;
-    euclidean_distance = 0.25;
+    euclidean_distance = 0.25; //default 0.25
     max_cluster_size = 360;
     p_marker_pub = false;
     // timer_->cancel();
@@ -66,7 +66,7 @@ float clustering::get_yaw(float x, float y ,float z, float w){
                 yaw = atan2(t3,t4);
 
 return yaw;
-}
+}cd sr
 
 
 
@@ -102,7 +102,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
     RCLCPP_INFO(get_logger(),"now"); clusters.clear();}
    RCLCPP_INFO(get_logger(),"time is %lf",time);
   time = rclcpp::Clock().now();
-  clusters.clear();
+  // clusters.clear();
   auto start = std::chrono::steady_clock::now();
 
   std::vector<pointList> point_clusters_not_transformed;
@@ -145,7 +145,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
       RCLCPP_INFO (get_logger(),"CLUSTERS size is %d ",clusters.size());
       for(unsigned int c=0;c<clusters.size();++c)
       {
-        euclidean[g][c] = abs( mean_x - clusters[c].meanX()) + abs(mean_y - clusters[c].meanY()); 
+        // euclidean[g][c] = abs( mean_x - clusters[c].meanX()) + abs(mean_y - clusters[c].meanY()); 
       }
     }
       
@@ -172,6 +172,8 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
     #pragma omp parallel for
+
+  // RCLCPP_INFO(get_logger(),"ego_cordinate{%4f,%4f} ",ego_pose.getOrigin().getX(),ego_pose.getOrigin().getY());
     for(unsigned int p=0; p<pairs.size();++p){
       clusters[pairs[p].first].update(point_clusters[pairs[p].second], dt, ego_pose);
     }
