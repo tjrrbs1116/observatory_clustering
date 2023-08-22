@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(observatory_clustering)
+project(2dlidar_clustering)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -35,7 +35,7 @@ include_directories(
   include
 )
 
-set(executable_name observatory_clustering)
+set(executable_name 2dlidar_clustering)
 add_executable(${executable_name}
   src/main.cpp
 )

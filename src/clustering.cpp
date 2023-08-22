@@ -66,7 +66,7 @@ float clustering::get_yaw(float x, float y ,float z, float w){
                 yaw = atan2(t3,t4);
 
 return yaw;
-}cd sr
+}
 
 
 
@@ -145,7 +145,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
       RCLCPP_INFO (get_logger(),"CLUSTERS size is %d ",clusters.size());
       for(unsigned int c=0;c<clusters.size();++c)
       {
-        // euclidean[g][c] = abs( mean_x - clusters[c].meanX()) + abs(mean_y - clusters[c].meanY()); 
+        euclidean[g][c] = abs( mean_x - clusters[c].meanX()) + abs(mean_y - clusters[c].meanY()); 
       }
     }
       
@@ -171,7 +171,7 @@ void clustering::callback(const sensor_msgs::msg::LaserScan::ConstPtr& scan_in){
 
 
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
 
   // RCLCPP_INFO(get_logger(),"ego_cordinate{%4f,%4f} ",ego_pose.getOrigin().getX(),ego_pose.getOrigin().getY());
     for(unsigned int p=0; p<pairs.size();++p){
